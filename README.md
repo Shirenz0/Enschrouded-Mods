@@ -1,5 +1,7 @@
 # Enshrouded Mods
 
+ These mods are made for Enschrouded 1.0, Do not use for lower versions!
+
 A collection of mods for [Enshrouded](https://store.steampowered.com/app/1203620/Enshrouded/),
 maintained by [Shirenz0](https://github.com/Shirenz0).
 
