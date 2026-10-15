@@ -1,5 +1,7 @@
 # Skill Tree Mod (Free Skills & Upgrades)
 
+THis new version has been tested against 1.0 and is working but only with the kfc-parser in the repo https://github.com/Shirenz0/kfc-parser/
+
 An [EML](https://github.com/Shirenz0/kfc-parser) mod for Enshrouded that changes the skill tree
 and the upgrade costs:
 
