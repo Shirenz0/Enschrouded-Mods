@@ -12,19 +12,26 @@ The mod only changes game data before the game starts. It does not run code whil
 | | |
 | --- | --- |
 | Mod id | `free-skills` |
-| Version | 3.1.0 |
+| Version | 3.2.0 |
 | Requires | EML (Enshrouded Mod Loader), see [Installing EML](#installing-eml) |
 | Works on | Game client and dedicated server (Windows, Linux with Wine/Proton) |
 
 ## Compatibility
 
-This version was built and tested for the **early access build `ea_update_08`**.
+Tested on the **early access build `ea_update_08`**. Not yet verified on Enshrouded 1.0.
 
-Enshrouded 1.0 changes the skill tree (the skill tree is reset on the first 1.0 launch) and
-rebalances many values. The part of this mod that restores the dismantle values
-(see [What it changes](#what-it-changes)) uses hardcoded values from `ea_update_08` and must be
-checked against 1.0 before it is used there. Until this README says otherwise, treat the mod as
-**not verified for 1.0**.
+Version 3.2.0 is prepared for game updates:
+
+- The skill tree, skill point and recipe changes are generic and also apply to new nodes and
+  recipes.
+- If a resource type or field no longer exists in a newer game version, the mod skips it and
+  writes a warning to the EML log instead of failing, for example:
+  `[free-skills] No skill tree nodes were changed, the skill tree data may have changed in this game version`.
+- The old dismantle value restore (hardcoded `ea_update_08` values) is now **off by default**,
+  so it no longer overwrites the rebalanced values of newer game versions.
+
+Enshrouded 1.0 resets the skill tree on the first launch, so spend your skill points again after
+updating.
 
 ## Installing EML
 
@@ -79,8 +86,8 @@ for the server process (for Docker: in the container environment).
 3. Start the game. The EML log in `logs/<date>.eml.log` should contain lines like:
 
    ```
-   [free-skills] v3.1.0 Loading...
-   [free-skills] nodes=222 spp=1 upgrades=12 dismantleRestore=3
+   [free-skills] v3.2.0 Loading...
+   [free-skills] nodes=222 spp=1 upgrades=12
    [free-skills] Done.
    ```
 
@@ -97,7 +104,7 @@ so that the server and the clients use the same values.
 | `freeSkillNodeCosts` | `true` | Sets the cost of every skill tree node to 0. |
 | `skillPointsPerLevel` | `10` | Skill points gained per level. Values of 0 or lower leave the game default. |
 | `freeUpgradeRecipes` | `true` | Removes the material, energy and water costs of upgrade recipes. |
-| `patchAllPresets` | `true` | Present in the config but currently not used by the code. |
+| `restoreDismantleValues` | `false` | Forces the `ea_update_08` dismantle and perk values and enables durability in all game presets. Only for `ea_update_08`; leave it off on newer game versions. |
 
 Perk upgrade costs are intentionally **not** changed: the same fields control how many runes
 you get back when dismantling items.
@@ -111,11 +118,18 @@ Technically the mod patches these game resources through EML:
 | `keen::SkillTreeResource`, `keen::DevSkillTreeResource` | `costs = 0` on every node with a cost |
 | `keen::BalancingTable` | `skillPointsPerLevel` set to the configured value |
 | `keen::RecipeRegistryResource`, `keen::DevRecipeRegistryResource` | for recipes with `isUpgrade`: input counts, `requiredEnergy`, `waterAmount` and `waterCharges` set to 0 |
-| `keen::BalancingTable`, `keen::GameSettingsPresetsResource` | dismantle related values restored to the `ea_update_08` defaults, durability enabled in all presets |
+| `keen::BalancingTable`, `keen::GameSettingsPresetsResource` | only with `restoreDismantleValues=true`: dismantle related values set to the `ea_update_08` defaults, durability enabled in all presets |
 
-The last step exists because an earlier version of the mod broke dismantling (about 4 runes
-instead of about 120). It always runs last and forces the `ea_update_08` values, which is why it
-has to be reviewed for every game update.
+The dismantle restore was added because an earlier version of the mod broke dismantling (about
+4 runes instead of about 120). EML always patches from the original game data, so values changed
+by older versions of the mod cannot persist, and the restore is no longer needed by default.
+
+## Changelog
+
+- **3.2.0**: dismantle value restore is opt-in (`restoreDismantleValues`, default off); missing
+  resource types and fields are skipped with a warning instead of failing; warnings when a
+  feature changed nothing; removed the unused `patchAllPresets` setting.
+- **3.1.0**: original release by "Enshrouded Mods".
 
 ## Uninstalling
 

@@ -1,27 +1,32 @@
 --[[
-  Free Skills & Upgrades v3.1.0
+  Free Skills & Upgrades v3.2.0
 
   Skills / SP / free upgrade recipes only touch safe fields.
-  ALWAYS restores full vanilla dismantle values at the end (this mod loads last).
-  seed=1 or low creep/nominator caused ~4 runes instead of ~120.
+
+  The dismantle value restore (hardcoded ea_update_08 values) is now opt-in via
+  restoreDismantleValues. EML always patches from the vanilla backup, so values
+  changed by older versions of this mod cannot persist; forcing old values would
+  overwrite the rebalanced values of newer game versions.
 ]]
+
+local VERSION = "3.2.0"
 
 local DEFAULT_CONFIG = {
     enabled = true,
     freeSkillNodeCosts = true,
     skillPointsPerLevel = 10,
     freeUpgradeRecipes = true,
-    patchAllPresets = true,
+    restoreDismantleValues = false,
 }
 
 local BOOL_KEYS = {
     enabled = true,
     freeSkillNodeCosts = true,
     freeUpgradeRecipes = true,
-    patchAllPresets = true,
+    restoreDismantleValues = true,
 }
 
--- Vanilla ea_update_08 — required for full inventory dismantle rune yields.
+-- Vanilla ea_update_08 values, only used when restoreDismantleValues = true.
 local VANILLA_PRESETS = {
     { perkCostFactor = 0.5, perkUpgradeRecyclingFactor = 1.0 },
     { perkCostFactor = 1.0, perkUpgradeRecyclingFactor = 0.5 },
@@ -79,23 +84,64 @@ local config = {}
 for k, v in pairs(DEFAULT_CONFIG) do config[k] = v end
 for k, v in pairs(parseConfigFile("config.txt")) do config[k] = v end
 
+-- Errors raised by EML functions must be avoided entirely: in EML release
+-- builds an error thrown from EML into Lua aborts the game process, even
+-- inside pcall. So existence is checked up front instead of relying on pcall.
+
+-- Returns true when the struct value has a field with this name, including
+-- fields inherited from base types.
+local function hasField(obj, field)
+    local t = game.types.of(obj)
+    while t do
+        local fields = t.struct_fields
+        if fields and fields[field] ~= nil then
+            return true
+        end
+        t = t.inner_type
+    end
+    return false
+end
+
+-- Reads a field, or returns nil when the field does not exist (e.g. it was
+-- renamed in a newer game version).
+local function tryGet(obj, field)
+    if obj ~= nil and hasField(obj, field) then
+        return obj[field]
+    end
+    return nil
+end
+
+-- Writes a field if it exists, returns true on success.
 local function trySet(obj, field, value)
-    pcall(function() obj[field] = value end)
+    if obj ~= nil and hasField(obj, field) then
+        obj[field] = value
+        return true
+    end
+    return false
+end
+
+-- Returns all resources of a type, or an empty list when the type is unknown.
+local function getResources(typeName)
+    if game.types.get(typeName) == nil then
+        warn(string.format("[free-skills] Resource type %s not found in this game version", typeName))
+        return {}
+    end
+    return game.assets.get_resources_by_type(typeName)
 end
 
 local function zeroRecipeInput(input)
-    if input.itemStack and input.itemStack.count then
-        input.itemStack.count = 0
-    end
-    if input.inputItemCategory and input.inputItemCategory.count then
-        input.inputItemCategory.count = 0
+    for _, field in ipairs({ "itemStack", "inputItemCategory" }) do
+        local stack = tryGet(input, field)
+        if stack and tryGet(stack, "count") then
+            trySet(stack, "count", 0)
+        end
     end
 end
 
 local function applyVanillaDismantleRestore()
     local changed = 0
 
-    for _, resource in ipairs(game.assets.get_resources_by_type("keen::BalancingTable")) do
+    for _, resource in ipairs(getResources("keen::BalancingTable")) do
         local b = resource.data
         for field, value in pairs(VANILLA_BALANCING) do
             if b[field] ~= value then
@@ -113,7 +159,7 @@ local function applyVanillaDismantleRestore()
         end
     end
 
-    for _, resource in ipairs(game.assets.get_resources_by_type("keen::GameSettingsPresetsResource")) do
+    for _, resource in ipairs(getResources("keen::GameSettingsPresetsResource")) do
         for i, preset in ipairs(resource.data.presets or {}) do
             local s = preset.settings
             local vanilla = VANILLA_PRESETS[i]
@@ -144,10 +190,10 @@ local function patchSkillTreeNodes()
 
     local changed = 0
     for _, typeName in ipairs({ "keen::SkillTreeResource", "keen::DevSkillTreeResource" }) do
-        for _, treeResource in ipairs(game.assets.get_resources_by_type(typeName)) do
-            for _, node in ipairs(treeResource.data.nodes or {}) do
-                if node.costs and node.costs > 0 then
-                    node.costs = 0
+        for _, treeResource in ipairs(getResources(typeName)) do
+            for _, node in ipairs(tryGet(treeResource.data, "nodes") or {}) do
+                local costs = tryGet(node, "costs")
+                if type(costs) == "number" and costs > 0 and trySet(node, "costs", 0) then
                     changed = changed + 1
                 end
             end
@@ -157,14 +203,11 @@ local function patchSkillTreeNodes()
 end
 
 local function patchBalancingTable()
-    local resources = game.assets.get_resources_by_type("keen::BalancingTable")
-    if #resources == 0 then return 0 end
+    if not (config.skillPointsPerLevel and config.skillPointsPerLevel > 0) then return 0 end
 
     local changed = 0
-    for _, resource in ipairs(resources) do
-        local b = resource.data
-        if config.skillPointsPerLevel and config.skillPointsPerLevel > 0 then
-            b.skillPointsPerLevel = math.floor(config.skillPointsPerLevel)
+    for _, resource in ipairs(getResources("keen::BalancingTable")) do
+        if trySet(resource.data, "skillPointsPerLevel", math.floor(config.skillPointsPerLevel)) then
             changed = changed + 1
         end
     end
@@ -176,10 +219,10 @@ local function patchUpgradeRecipes()
 
     local changed = 0
     for _, typeName in ipairs({ "keen::RecipeRegistryResource", "keen::DevRecipeRegistryResource" }) do
-        for _, registryResource in ipairs(game.assets.get_resources_by_type(typeName)) do
-            for _, recipe in ipairs(registryResource.data.recipes or {}) do
-                if recipe.isUpgrade then
-                    for _, input in ipairs(recipe.input or {}) do
+        for _, registryResource in ipairs(getResources(typeName)) do
+            for _, recipe in ipairs(tryGet(registryResource.data, "recipes") or {}) do
+                if tryGet(recipe, "isUpgrade") then
+                    for _, input in ipairs(tryGet(recipe, "input") or {}) do
                         zeroRecipeInput(input)
                     end
                     trySet(recipe, "requiredEnergy", 0)
@@ -194,8 +237,8 @@ local function patchUpgradeRecipes()
 end
 
 local function verifySalvage()
-    local presets = game.assets.get_resources_by_type("keen::GameSettingsPresetsResource")
-    local balancing = game.assets.get_resources_by_type("keen::BalancingTable")
+    local presets = getResources("keen::GameSettingsPresetsResource")
+    local balancing = getResources("keen::BalancingTable")
     if #presets == 0 or #balancing == 0 then return end
 
     local s = presets[1].data.presets[1].settings
@@ -220,23 +263,42 @@ local function verifySalvage()
         and b.perkCostFactorWeaponsShield == 1.0
         and g and g.extractBaseCost == 60
     if not ok then
-        warn("[free-skills] Dismantle values not vanilla - run Restore-And-Patch.bat")
+        warn("[free-skills] Dismantle values differ from the ea_update_08 values")
     end
 end
 
-print("[free-skills] v3.1.0 Loading...")
+-- Warn when an enabled feature changed nothing; this usually means the game
+-- data changed in a newer game version and the mod needs an update.
+local function checkResults(nodes, balancing, upgrades)
+    if config.freeSkillNodeCosts and nodes == 0 then
+        warn("[free-skills] No skill tree nodes were changed, the skill tree data may have changed in this game version")
+    end
+    if config.skillPointsPerLevel and config.skillPointsPerLevel > 0 and balancing == 0 then
+        warn("[free-skills] skillPointsPerLevel was not applied, the balancing table may have changed in this game version")
+    end
+    if config.freeUpgradeRecipes and upgrades == 0 then
+        warn("[free-skills] No upgrade recipes were changed, the recipe data may have changed in this game version")
+    end
+end
+
+print(string.format("[free-skills] v%s Loading...", VERSION))
 
 if config.enabled then
     local nodes = patchSkillTreeNodes()
     local balancing = patchBalancingTable()
     local upgrades = patchUpgradeRecipes()
-    local restored = applyVanillaDismantleRestore()
 
     print(string.format(
-        "[free-skills] nodes=%d spp=%d upgrades=%d dismantleRestore=%d",
-        nodes, balancing, upgrades, restored
+        "[free-skills] nodes=%d spp=%d upgrades=%d",
+        nodes, balancing, upgrades
     ))
-    verifySalvage()
+    checkResults(nodes, balancing, upgrades)
+
+    if config.restoreDismantleValues then
+        local restored = applyVanillaDismantleRestore()
+        print(string.format("[free-skills] dismantleRestore=%d", restored))
+        verifySalvage()
+    end
 else
     print("[free-skills] Disabled in config.txt")
 end

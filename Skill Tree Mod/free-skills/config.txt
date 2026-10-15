@@ -3,7 +3,9 @@ enabled=true
 freeSkillNodeCosts=true
 skillPointsPerLevel=10
 freeUpgradeRecipes=true
-patchAllPresets=true
+
+# Force the ea_update_08 dismantle/perk values (BalancingTable and game presets).
+# Off by default: on newer game versions this overwrites the rebalanced values.
+restoreDismantleValues=false
 
 # Perk upgrade costs are NOT changed here (same fields control dismantle rune yield).
-# Use cheaper-perk-upgrades mod separately if you accept lower dismantle runes.
