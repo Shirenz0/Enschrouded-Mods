@@ -1,0 +1,9 @@
+enabled=true
+
+freeSkillNodeCosts=true
+skillPointsPerLevel=10
+freeUpgradeRecipes=true
+patchAllPresets=true
+
+# Perk upgrade costs are NOT changed here (same fields control dismantle rune yield).
+# Use cheaper-perk-upgrades mod separately if you accept lower dismantle runes.

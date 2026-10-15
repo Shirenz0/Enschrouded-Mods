@@ -1,0 +1,9 @@
+{
+  "id": "free-skills",
+  "name": "Free Skills & Upgrades",
+  "version": "3.1.0",
+  "capabilities": ["patch"],
+  "description": "Free skill nodes, bonus SP, free upgrades. Vanilla Zerlegen and dismantle runes (v3.1).",
+  "authors": ["Enshrouded Mods"],
+  "license": "MIT"
+}
